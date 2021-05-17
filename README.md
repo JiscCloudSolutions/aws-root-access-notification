@@ -26,3 +26,9 @@ All-region CloudTrail setup - see:
 Deploy the template to your AWS account - I put it in us-east-1
 
 Once in a completed state, find the SNS topic and add some subscriptions. This code is designed for email so outputs text.
+
+## Comments/Suggestions
+This guide is deliberately sparse. If you would prefer to see more here, like a step-by-step guide, etc. then raise
+a ticket with details of what you need.
+
+Thanks.
