@@ -19,6 +19,7 @@ I made a few small changes:
 ## Pre-requisites
 All-region CloudTrail setup - see: 
 https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-tutorial.html
+
 https://docs.aws.amazon.com/awscloudtrail/latest/userguide/receive-cloudtrail-log-files-from-multiple-regions.html
 
 ## How to use
