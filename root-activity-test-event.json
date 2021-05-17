@@ -1,0 +1,39 @@
+{
+    version: '0',
+    id: 'id',
+    'detail-type': 'AWS Console Sign In via CloudTrail',
+    source: 'aws.signin',
+    account: '111111111111',
+    time: '2021-04-29T16:07:37Z',
+    region: 'us-east-1',
+    resources: [],
+    detail: {
+      eventVersion: '1.08',
+      userIdentity: {
+        type: 'Root',
+        principalId: '111111111111',
+        arn: 'arn:aws:iam::111111111111:root',
+        accountId: '111111111111',
+        accessKeyId: ''
+      },
+      eventTime: '2021-04-29T16:07:37Z',
+      eventSource: 'signin.amazonaws.com',
+      eventName: 'ConsoleLogin',
+      awsRegion: 'global',
+      sourceIPAddress: 'x.x.x.x',
+      userAgent: 'Mozilla/5.0',
+      requestParameters: null,
+      responseElements: { ConsoleLogin: 'Success' },
+      additionalEventData: {
+        LoginTo: 'https://console.aws.amazon.com/console/home?state=hashArgs%23&isauthcode=true',
+        MobileVersion: 'No',
+        MFAUsed: 'Yes'
+      },
+      eventID: 'eventID',
+      readOnly: false,
+      eventType: 'AwsConsoleSignIn',
+      managementEvent: true,
+      eventCategory: 'Management'
+    }
+  }
+  

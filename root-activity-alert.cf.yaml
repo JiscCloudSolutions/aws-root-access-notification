@@ -1,0 +1,189 @@
+# Based on https://aws.amazon.com/blogs/mt/monitor-and-notify-on-aws-account-root-user-activity/
+
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  RootActivitySNSTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: !Sub '${AWS::StackName}-Root-Activity-Topic'
+      TopicName: !Sub '${AWS::StackName}-Root-Activity-Topic'
+
+  EventsRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: "Events rule to monitor root"
+      EventPattern:
+        detail-type:
+          - 'AWS API Call via CloudTrail'
+          - 'AWS Console Sign In via CloudTrail'
+        detail:
+          userIdentity:
+            type:
+              - 'Root'
+      Name: !Sub '${AWS::StackName}-Root-Activity-Rule'
+      State: 'ENABLED'
+      Targets:
+        - Arn: !GetAtt RootActivityLambda.Arn
+          Id: !Ref AWS::StackName
+
+  RootActivityLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Runtime: python3.6
+      Role: !GetAtt RootActivityLambdaRole.Arn
+      Handler: index.root_activity_handler
+      Description: 'Root activity alert sender'
+      Environment:
+        Variables:
+          SNSARN: !Ref RootActivitySNSTopic
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import logging
+          import os
+          import botocore.session
+          from botocore.exceptions import ClientError
+
+          session = botocore.session.get_session()
+
+          iamclient = boto3.client('iam')
+          snsclient = boto3.client('sns')
+
+          logging.basicConfig(level=logging.DEBUG)
+          logger = logging.getLogger(__name__)
+
+          def find_account_alias(event):
+              try:
+                  aliases = iamclient.list_account_aliases()
+                  if 'AccountAliases' in aliases:
+                      return aliases['AccountAliases'][0]
+                  else:
+                      return 'not set'
+              except ClientError as e:
+                  log.error('Unable to call list_account_aliases')
+                  log.error(e)
+                  return 'error getting alias'
+
+          def find_mfa_used(event):
+              detail = event['detail']
+              if 'additionalEventData' in detail and 'MFAUsed' in detail['additionalEventData']:
+                  return detail['additionalEventData']['MFAUsed']
+              return 'not specified'
+
+          def find_login_result(event):
+              detail = event['detail']
+              if 'responseElements' in detail and 'ConsoleLogin' in detail['responseElements']:
+                  return detail['responseElements']['ConsoleLogin']
+              return 'not login event'
+
+          def root_activity_handler(event, context):
+              logger.setLevel(logging.DEBUG)
+
+              logger.debug('Root Activity Handler with event: %s' %event)
+
+              eventname = event['detail']['eventName']
+              snsARN = os.environ['SNSARN']
+
+              event_at = event['time']
+              user_type = event['detail']['userIdentity']['type']
+              account_id = event['detail']['userIdentity']['accountId']
+              account_alias = find_account_alias(event)
+              principal_id = event['detail']['userIdentity']['principalId']
+              access_key_id = event['detail']['userIdentity']['accessKeyId']
+              mfa_used = find_mfa_used(event)
+              login_result = find_login_result(event)
+              event_source = event['detail']['eventSource']
+              event_name = event['detail']['eventName']
+              source_ip = event['detail']['sourceIPAddress']
+
+              root_activity_msg = ("""
+                  Root Activity Detected
+
+                  At: %s
+                  Account ID: %s
+                  Account Alias: %s
+
+                  User Type: %s
+                  Principal ID: %s
+                  Access Key ID: %s
+
+                  MFA used: %s
+                  Login result: %s
+
+                  Event Source: %s
+                  Event Name: %s
+
+                  Source IP: %s
+              """ %(event_at, account_id, account_alias, user_type, principal_id, access_key_id, mfa_used, login_result, event_source, event_name, source_ip))[:1600]
+
+              root_activity_subject = ("Root Activity Detected - %s on account %s" %(event_name, principal_id))[:100]
+
+              try:
+                  logger.debug("Attempting SNS publish")
+                  logger.debug("Subject: %s" %root_activity_subject)
+                  logger.debug("Message: %s" %root_activity_msg)
+
+                  snspub = snsclient.publish(
+                      TargetArn = snsARN,
+                      Subject = root_activity_subject,
+                      Message = root_activity_msg,
+                  )
+                  logger.debug("SNS publish sent, response is %s" %snspub)
+              except ClientError as e:
+                  logger.error("Error on SNS publish: %s" %e)
+
+  RootActivityLambdaRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: 'Allow'
+          Principal:
+            Service:
+              - 'lambda.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      RoleName: !Sub '${AWS::StackName}-RootActivityLambdaRole'
+
+  RootActivityLambdaPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'LogStreamAccess'
+            Effect: 'Allow'
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: !Sub
+                  - 'arn:aws:logs:*:${AWS::AccountId}:log-group:/aws/lambda/${FunctionName}:*'
+                  - FunctionName: !Ref RootActivityLambda
+          - Sid: 'CreateLogGroupAllow'
+            Effect: 'Allow'
+            Action:
+              - 'logs:CreateLogGroup'
+            Resource: !Sub 'arn:aws:logs:*:${AWS::AccountId}:*'
+          - Sid: 'SNSPublishAllow'
+            Effect: 'Allow'
+            Action:
+              - 'sns:Publish'
+            Resource:
+              - !Ref RootActivitySNSTopic
+          - Sid: 'ListAccountAliasAllow'
+            Action:
+              - 'iam:ListAccountAliases'
+            Effect: 'Allow'
+            Resource: '*'
+      PolicyName: !Sub '${AWS::StackName}-RootActivityLambdaPolicy'
+      Roles:
+        - !Ref RootActivityLambdaRole
+
+  RootActivityLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref RootActivityLambda
+      Principal: 'events.amazonaws.com'
+      SourceArn: !GetAtt EventsRule.Arn
