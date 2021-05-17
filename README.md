@@ -18,9 +18,9 @@ I made a few small changes:
 
 ## Pre-requisites
 All-region CloudTrail setup - see: 
-https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-tutorial.html
 
-https://docs.aws.amazon.com/awscloudtrail/latest/userguide/receive-cloudtrail-log-files-from-multiple-regions.html
+* https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-tutorial.html
+* https://docs.aws.amazon.com/awscloudtrail/latest/userguide/receive-cloudtrail-log-files-from-multiple-regions.html
 
 ## How to use
 Deploy the template to your AWS account - I put it in us-east-1
